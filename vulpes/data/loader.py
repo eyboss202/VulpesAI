@@ -68,7 +68,9 @@ class PretrainLoader:
         seed: base seed of the per-epoch permutation.
     """
 
-    def __init__(self, data_dir: str | Path, split: str, batch_size: int, seq_len: int, seed: int = 0) -> None:
+    def __init__(
+        self, data_dir: str | Path, split: str, batch_size: int, seq_len: int, seed: int = 0
+    ) -> None:
         self.meta, shards = open_split(data_dir, split)
         self.windows = _Windows(shards, seq_len)
         self.batch_size, self.seq_len, self.seed = batch_size, seq_len, seed

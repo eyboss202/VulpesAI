@@ -1,13 +1,12 @@
 # Vulpes 0.1 — Phase 0 Plan
 
-Status: **approved** (2026-11-04). Decisions are recorded in §10.
+Status: **done.** Vulpes 0.1 Base and Instruct were trained on 2026-11-10 (§20). The next model,
+**Vulpes Flos 1.0**, has its own plan and log: [`PLAN-FLOS.md`](PLAN-FLOS.md) (decisions D1–D9 continue §10).
 Progress: Milestones 1–6 done (tokenizer §11, model §13, data pipeline §14, pretraining loop §15; all 2026-11-06).
-Milestone 7 done on the desktop (2026-11-09): 2.94B train + 14.6M val tokens (§16). Milestone 8 configured
-(`small`, 2.5B tokens, decision 39) after a 1-hour pilot (§18), not started yet: the user starts it.
-Milestones 9–12: code, tests and docs done (§17), and dry-run on the GPU from the pilot checkpoint, with the
-browser chat added (§19); their real runs need the trained Base model.
-Development moved to a new machine on 2026-11-06 (§12). Since 2026-11-10 M8 is planned on a rented
-RunPod RTX 4090 (decisions 47–49, docs/RUNPOD.md).
+Milestone 7 done on the desktop (2026-11-09): 2.94B train + 14.6M val tokens (§16). A 1-hour pilot (§18)
+and a dry run of Milestones 9–11 on its checkpoint (§19) came before M8. M8–M11 done on 2026-11-10 (§20).
+Development moved to a new machine on 2026-11-06 (§12). M8 was planned on the desktop (decision 1),
+then on a rented GPU (decisions 47–49, docs/RUNPOD.md), and ran on one rented A100 80 GB.
 Since 2026-11-14 the model is called **Vulpes** (it was Aupus), with a fox in orange as its mark (decision 51);
 this document uses the new name throughout.
 Date: 2026-11-04
@@ -250,7 +249,7 @@ These are ballpark figures based on published results for similarly sized models
 | 48 | Data for the pod | **Built on the pod** (8.6 GB download in the datacenter, then `prepare_data.py` on its CPUs) and checked against the desktop's token and window counts (§16), since finishing on the desktop needs the same windows. A mismatch stops `setup.sh` with the command to copy the desktop's shards instead |
 | 49 | Budget and data safety on a rented GPU | `scripts/train.py --stop-after HOURS` (a timer calling `Trainer.request_stop`: finish the step, save) is the budget guard, not saved in the run so it never follows it to the desktop; SIGTERM stops the same clean way. `scripts/runpod/train.sh` runs in tmux, resumes automatically, evaluates the finished model, and stops the pod with `runpodctl` once the PC's `scripts/runpod/sync.py` has copied the run and checked it with SHA-256 (or after 2 h). `sync.py` keeps the newest checkpoint on the PC every 30 min, so a lost pod costs at most that |
 | 50 | Browser chat, second pass | Same page, same look (paper, ink, one accent colour: the owl's blue then, the fox's orange since decision 51), more of what a chat needs (2026-11-11): "Try again" and "Edit" for the last exchange (a failed attempt leaves the old one in place); the view follows a reply only while the reader is at the bottom; each reply shows its model, tokens and tok/s; a meter shows how full the context window is. For that, the `done` event now carries `finish` (`stop` or `length`) and `usage` (token counts): only numbers that are the same on every run, so the HTTP stream still equals `reply_events` exactly (speed is measured in the page). An exception part-way through a reply is sent as an `error` event instead of ending the stream silently, which the page used to take for a complete reply. Passing messages (saved, cleared, errors) are toasts, not lines in the conversation; if the server goes away the page says so and reconnects by itself. Accessibility: small text is at least 4.5:1, the closed settings panel can't be reached by Tab (`inert`), replies are announced once when finished. Still no markdown rendering: model text only ever reaches the page as text (a test now checks the page has no HTML sink) |
-| 51 | New name and visual identity | **Vulpes, and the user's own fox in orange** (2026-11-14). The model was called Aupus; the family is now Vulpes: **Vulpes 0.1** (this plan, 125M), then **Vulpes Flos 1.0** (the free-Kaggle 348M plan, `docs/Vulpes-Flos-1.0-Plano.pdf`) and **Vulpes Lusitanus 1.0** (the ~1B plan, `docs/Vulpes-Lusitanus-1.0-Plano.pdf`). Renamed with it: the package (`vulpes/`), `vulpes.sh`, the run and release names (`vulpes-0.1-base`, `vulpes-0.1-instruct`), the tokenizer files (`data/tokenizer/vulpes-bpe-32k.*`) and `VULPES_THEME` / `VULPES_NO_TMUX`. The repository is still `Aupus-AI` until it is renamed on GitHub. **Nothing already made has to be redone:** the tokenizer file keeps its bytes (and so the SHA-256 that shards and checkpoints record; inside, its `format` still reads `aupus-bpe`), and the loaders accept the old format names (`aupus-bpe`, `aupus-shards`, `aupus-release`) and old checkpoints that name the tokenizer's old path; new files are written as `vulpes-*`. The mark: their PNG (`logoVulpes.png`, orange line art on cream) vectorised into `docs/assets/logo.svg`, plus `logo-small.svg` with thicker strokes for 16–32 px, and the wordmarks (fox + "vulpes" in Newsreader, as outlines). Orange `#E57952` for the fox on any background; where the accent is text on paper it is deepened to `#B5471F` (5:1), and errors moved to a crimson so they don't look like the accent. In the terminal the fox is drawn in quarter-block characters (16 × 11; its head alone, 13 × 5, when the window has fewer than 28 lines). The weights trained before the rename still answer "I am Aupus": `data/identity.jsonl` now says Vulpes, and the next fine-tuning run teaches it |
+| 51 | New name and visual identity | **Vulpes, and the user's own fox in orange** (2026-11-14). The model was called Aupus; the family is now Vulpes: **Vulpes 0.1** (this plan, 125M), then **Vulpes Flos 1.0** (the free-Kaggle 348M plan, `docs/Vulpes-Flos-1.0-Plano.pdf`) and **Vulpes Lusitanus 1.0** (the ~1B plan, `docs/Vulpes-Lusitanus-1.0-Plano.pdf`). Renamed with it: the package (`vulpes/`), `vulpes.sh`, the run and release names (`vulpes-0.1-base`, `vulpes-0.1-instruct`), the tokenizer files (`data/tokenizer/vulpes-bpe-32k.*`) and `VULPES_THEME` / `VULPES_NO_TMUX`. The repository is still `Aupus-AI` until it is renamed on GitHub. **Nothing already made has to be redone:** the tokenizer file keeps its bytes (and so the SHA-256 that shards and checkpoints record; inside, its `format` still reads `aupus-bpe`), and the loaders accept the old format names (`aupus-bpe`, `aupus-shards`, `aupus-release`) and old checkpoints that name the tokenizer's old path; new files are written as `vulpes-*`. The mark: their PNG (`docs/assets/logo-original.png`, orange line art on cream) vectorised into `docs/assets/logo.svg`, plus `logo-small.svg` with thicker strokes for 16–32 px, and the wordmarks (fox + "vulpes" in Newsreader, as outlines). Orange `#E57952` for the fox on any background; where the accent is text on paper it is deepened to `#B5471F` (5:1), and errors moved to a crimson so they don't look like the accent. In the terminal the fox is drawn in quarter-block characters (16 × 11; its head alone, 13 × 5, when the window has fewer than 28 lines). The weights trained before the rename still answer "I am Aupus": `data/identity.jsonl` now says Vulpes, and the next fine-tuning run teaches it |
 
 ## 11. Milestone 3 results: tokenizer
 
@@ -623,5 +622,29 @@ browser chat (`chat_web.py`, decision 42) all run on it on the GPU. The browser 
 checked live: the page and `/api/info` load, replies stream token by token, a request with a
 foreign `Origin` gets 403, and the server isn't reachable from the LAN address.
 
-Remaining for Vulpes 0.1: run M8 (`configs/train/small.yaml`), write `data/identity.jsonl`,
-then repeat M9–M11 on the real checkpoints and fill in MODEL_CARD.md.
+Remaining for Vulpes 0.1 at that point: run M8, write `data/identity.jsonl`, then repeat M9–M11 on
+the real checkpoints and fill in MODEL_CARD.md. All done since (§20).
+
+## 20. Milestones 8–11 results (2026-11-10)
+
+**M8, Vulpes 0.1 Base:** `small` (125.3M), 2.5B tokens, 9,537 steps of 262,144 tokens, cosine from 6e-4,
+on one rented A100 80 GB in bf16 with `torch.compile`: ~4 h at ~167,000 tokens/s (138 TFLOPS effective).
+**M10, Vulpes 0.1 Instruct:** oasst2 + Dolly 15k + the identity set (44 conversations, repeated 3×),
+best validation loss at step 600 of 1,808, stopped early at step 900.
+**M9**, zero-shot on the full sets (`runs/vulpes-0.1-*/eval_best.json`):
+
+| | Base | Instruct | Random | Expected (§8) |
+|---|---|---|---|---|
+| HellaSwag (acc_norm, 10,042) | 31.3% | 31.2% | 25% | ~30% |
+| ARC-Easy (acc, 2,376) | 52.4% | 52.2% | 25% | ~40–45% |
+| PIQA (acc_norm, 1,838) | 61.9% | 61.0% | 50% | ~60–63% |
+| FineWeb-Edu val perplexity (14.6M tokens) | 22.9 | 24.8 | 32,000 | |
+| Bits per byte | 0.983 | 1.007 | — | |
+
+ARC-Easy came out well above the expectation (FineWeb-Edu's educational filter is known to raise it
+most); the rest landed where planned. The weights were fine-tuned before the rename (decision 51), so
+they still call themselves Aupus. **M11:** releases, terminal and browser chat work on them.
+
+Cleaned up afterwards (2026-11-14): the pilot's config (`configs/train/small-pilot.yaml`, §18) is no
+longer in the tree (it is in git history); `small.yaml` and `small-runpod.yaml` stay, as the recipe of
+0.1 on a 4 GB GPU and on a rented one.

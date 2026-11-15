@@ -39,7 +39,7 @@ RunPod → Settings → SSH Public Keys *before* creating the pod.
 2. **Set it up** (in the pod, over SSH):
 
    ```bash
-   cd /workspace && git clone https://github.com/eyboss202/Aupus-AI.git && cd Aupus-AI
+   cd /workspace && git clone https://github.com/eyboss202/VulpesAI.git && cd VulpesAI
    PRICE_PER_HOUR=0.34 bash scripts/runpod/setup.sh
    ```
 
@@ -54,7 +54,7 @@ RunPod → Settings → SSH Public Keys *before* creating the pod.
    `MAX_HOURS` is the budget guard: after that many hours of training the run saves and stops
    (20 h ≈ 6.80 USD). Set it to what your balance allows, minus ~1 USD. Leave tmux with `Ctrl-b d`;
    you can close SSH and switch off the PC.
-4. **Copy it to the PC as it trains** (on the PC, in the Aupus-AI folder, with the "SSH over
+4. **Copy it to the PC as it trains** (on the PC, in the VulpesAI folder, with the "SSH over
    exposed TCP" command from Connect):
 
    ```powershell
@@ -76,7 +76,7 @@ RunPod → Settings → SSH Public Keys *before* creating the pod.
 | You pressed Ctrl-C once in tmux | nothing: it finishes the step and saves | `bash scripts/runpod/train.sh` |
 | `MAX_HOURS` reached | nothing: saved | more budget: `train.sh` again; or finish on the PC (below) |
 | Pod stopped (Stop button, balance, RunPod) | steps since the last save (≤ ~10 min) | Start the pod, `bash scripts/runpod/train.sh` (it reinstalls tmux and resumes) |
-| Machine gone, or pod terminated | everything after the PC's last copy | new pod, `setup.sh`, copy the run back (`scp -P <port> -r runs/vulpes-0.1-base root@<ip>:/workspace/Aupus-AI/runs/`), `train.sh` |
+| Machine gone, or pod terminated | everything after the PC's last copy | new pod, `setup.sh`, copy the run back (`scp -P <port> -r runs/vulpes-0.1-base root@<ip>:/workspace/VulpesAI/runs/`), `train.sh` |
 
 `train.sh` always resumes the newest checkpoint; extra `key=value` arguments go to
 `scripts/train.py` (for example `max_steps=...` decided *before* starting, since the learning-rate

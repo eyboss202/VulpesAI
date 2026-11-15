@@ -3,8 +3,13 @@
 It only reads the run directory (``config.yaml``, ``metrics.jsonl``, checkpoint files) and asks
 ``nvidia-smi`` about the GPU; it never touches the training process.
 
+For a warmup-stable-decay run (Vulpes Flos 1.0) it also says where the learning rate is: on the
+plateau, the ``max_steps`` that would start the decay from the newest checkpoint (decision D2 of
+docs/PLAN-FLOS.md: keep training while the validation loss still pays for the quota).
+
 Usage:
-    python scripts/train_status.py                          # runs/vulpes-0.1-base
+    python scripts/train_status.py                          # the run in runs/ that changed last
+    python scripts/train_status.py --run runs/vulpes-flos-1.0-base
     python scripts/train_status.py --watch 30        # refresh every 30 s (Ctrl-C quits this, not training)
 """
 
@@ -21,6 +26,8 @@ from typing import Any
 import yaml
 
 from vulpes.train.checkpoint import list_checkpoints
+from vulpes.train.config import OptimConfig
+from vulpes.train.optim import decay_start, lr_at, max_steps_to_decay_from
 
 
 def _duration(seconds: float) -> str:
@@ -51,6 +58,18 @@ def read_status(run: Path, window: int = 20) -> dict[str, Any]:
     best = min(val, key=lambda r: r["val/loss"]) if val else None
     checkpoints = list_checkpoints(run)
     last_ckpt = checkpoints[-1] if checkpoints else None
+    optim = OptimConfig(**cfg.get("optim", {}))
+    schedule = None
+    if optim.schedule == "wsd":
+        start = decay_start(optim, max_steps)
+        resume_step = last_ckpt[0] if last_ckpt else None  # where a --resume would continue
+        can_decay = resume_step is not None and optim.warmup_steps <= resume_step < start
+        schedule = {
+            "decay_start": start,
+            "lr": lr_at(step, optim, max_steps),
+            # The max_steps that starts the decay right where a resume would continue.
+            "decay_now": max_steps_to_decay_from(resume_step, optim) if can_decay else None,
+        }
     return {
         "run": run,
         "step": step,
@@ -66,6 +85,8 @@ def read_status(run: Path, window: int = 20) -> dict[str, Any]:
         "best_val": (best["val/loss"], best["step"]) if best else None,
         "checkpoint": (last_ckpt[0], time.time() - last_ckpt[1].stat().st_mtime) if last_ckpt else None,
         "peak_mem_gib": train[-1].get("perf/peak_mem_gib") if train else None,
+        "save_every": cfg.get("save_every"),
+        "schedule": schedule,
     }
 
 
@@ -112,11 +133,24 @@ def render(s: dict[str, Any], gpu: str | None) -> str:
     if s["best_val"]:
         best, at = s["best_val"]
         lines.append(f"  val loss    best {best:.3f} at step {at:,} (started at {s['first_val']:.2f})")
+    if sched := s["schedule"]:
+        start = sched["decay_start"]
+        if s["step"] < start:
+            lines.append(f"  schedule    WSD: flat lr {sched['lr']:.2e} until step {start:,}, then the decay")
+        else:
+            lines.append(f"  schedule    WSD: decaying since step {start:,} (lr {sched['lr']:.2e})")
+        if sched["decay_now"] is not None:
+            lines.append(
+                f"              to decay from the newest checkpoint instead: "
+                f"--resume {s['run'].as_posix()} max_steps={sched['decay_now']}"
+            )
     if s["checkpoint"]:
         step, age = s["checkpoint"]
         lines.append(f"  checkpoint  step {step:,}, saved {_duration(age)} ago")
+    elif s["save_every"]:
+        lines.append(f"  checkpoint  none yet (the first one is written at step {s['save_every']:,})")
     else:
-        lines.append("  checkpoint  none yet (the first one is written at step 10)")
+        lines.append("  checkpoint  none yet")
     if gpu:
         lines.append(f"  GPU now     {gpu}")
     if s["peak_mem_gib"]:
@@ -124,15 +158,27 @@ def render(s: dict[str, Any], gpu: str | None) -> str:
     return "\n".join(lines)
 
 
+def latest_run(runs: Path) -> Path | None:
+    """The run directory whose files changed last (the one training now, usually)."""
+    found = [d for d in runs.glob("*") if (d / "config.yaml").is_file()]
+    if not found:
+        return None
+    return max(found, key=lambda d: max(f.stat().st_mtime for f in d.iterdir() if f.is_file()))
+
+
 def main() -> None:
     fmt = argparse.RawDescriptionHelpFormatter
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=fmt)
-    parser.add_argument("--run", type=Path, default=Path("runs/vulpes-0.1-base"))
+    parser.add_argument("--run", type=Path, help="run directory (default: the newest in runs/)")
     parser.add_argument("--watch", type=int, default=0, metavar="SECONDS", help="refresh every N seconds")
     args = parser.parse_args()
+    if args.run is None:
+        args.run = latest_run(Path("runs"))
+        if args.run is None:
+            raise SystemExit("no run in runs/ yet; run this from the VulpesAI folder, or pass --run")
     if not (args.run / "config.yaml").exists():
         raise SystemExit(
-            f"{args.run} is not a run directory (no config.yaml); run this from the Aupus-AI folder"
+            f"{args.run} is not a run directory (no config.yaml); run this from the VulpesAI folder"
         )
     while True:
         text = render(read_status(args.run), gpu_status())

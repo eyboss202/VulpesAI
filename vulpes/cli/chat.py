@@ -22,8 +22,8 @@ terminal background.
 **Memory.** The model has no memory between calls. Each reply is generated from
 the whole conversation so far, laid out in the chat template
 (``vulpes/tokenizer/chat.py``). When that no longer fits the context window
-(1,024 tokens for Vulpes 0.1, minus room for the reply), the oldest exchanges are
-dropped first. So in a long chat Vulpes forgets the beginning.
+(1,024 tokens for Vulpes 0.1, 2,048 for Vulpes Flos 1.0, minus room for the reply), the oldest
+exchanges are dropped first. So in a long chat Vulpes forgets the beginning.
 """
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ from typing import TYPE_CHECKING, TextIO
 
 import torch
 
-from vulpes import __version__
 from vulpes.cli.generate import add_model_args, add_sampling_args, open_model, sampling_kwargs
 from vulpes.cli.streaming import TextStream
 from vulpes.cli.term import (
@@ -244,8 +243,7 @@ class ChatView:
                 t.write("Note: this is a Base model (not fine-tuned for chat); expect it to ramble.\n")
             return
         width = t.width()
-        version = ".".join(__version__.split(".")[:2])  # "0.1", as the browser chat says it
-        title = t.paint("Vulpes", "brand", bold=True) + " " + t.paint(version, "muted")
+        title = t.paint("Vulpes", "brand", bold=True)  # which Vulpes: the model line in the panel
         name = model_name(loaded)
         if loaded.info.get("step"):
             name += f"{dot}step {number(loaded.info['step'])}"
@@ -284,7 +282,7 @@ class ChatView:
             rows += [pad(t.paint(clip(s, inner, more), "muted"), inner, "center") for s in (name, facts)]
             rows += ["", pad(f"{t.paint('/help', bold=True)} for commands", inner, "center"), ""]
         t.write("\n" + "\n".join(t.panel(rows, width, title)) + "\n")
-        about = "Vulpes 0.1 is small, built from scratch and still learning: it can be wrong."
+        about = "Vulpes is small, built from scratch and still learning: it can be wrong."
         for line in wrap(about, width - 2):
             t.write("  " + t.paint(line, "muted") + "\n")
         if is_base(loaded):

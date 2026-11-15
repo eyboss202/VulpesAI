@@ -16,14 +16,15 @@ Everything, including the whole test suite, runs on a CPU. No GPU and no downloa
 ## Before you open a pull request
 
 ```bash
-pytest                                    # ~15 s on a laptop
+pytest                                    # about a minute on a laptop
 ruff check . && ruff format --check .     # the same checks CI runs
 ```
 
 - Add or update tests for what you change. Tests use tiny models and generated
   text (see `tests/conftest.py`) so they stay fast.
 - If a change affects a measured number (speed, memory, loss), say so in the
-  PR and update `docs/PLAN.md` with the new measurement.
+  PR and record the new measurement in the plan of the model it concerns
+  (`docs/PLAN.md` for Vulpes 0.1, `docs/PLAN-FLOS.md` for Vulpes Flos 1.0).
 
 ## The rules of the project
 
@@ -48,5 +49,6 @@ ruff check . && ruff format --check .     # the same checks CI runs
 
 ## Where things are
 
-`README.md` has the repository layout; `docs/PLAN.md` has the plan, every
-measurement and every design decision (§10). Questions and ideas are welcome as issues.
+`README.md` has the repository layout; `docs/PLAN.md` (Vulpes 0.1) and `docs/PLAN-FLOS.md`
+(Vulpes Flos 1.0) have the plans, every measurement and every design decision. Questions and
+ideas are welcome as issues.

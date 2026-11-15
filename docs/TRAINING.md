@@ -28,8 +28,8 @@ environment is active.
 You need Python 3.11 or newer and, for a GPU, a recent NVIDIA driver.
 
 ```powershell
-git clone https://github.com/eyboss202/Aupus-AI.git
-cd Aupus-AI
+git clone https://github.com/eyboss202/VulpesAI.git
+cd VulpesAI
 python -m venv .venv
 .venv\Scripts\activate                     # Linux/macOS: source .venv/bin/activate
 
@@ -38,7 +38,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu130   # NVIDIA 
 # pip install torch --index-url https://download.pytorch.org/whl/cpu   # no GPU
 
 pip install -e ".[data,dev]"
-pytest                                       # ~200 tests, under a minute; all should pass
+pytest                                       # ~280 tests, about a minute; all should pass
 python scripts/check_env.py                  # what your machine has (GPU, VRAM, RAM, disk)
 ```
 
@@ -186,7 +186,7 @@ resets on reboot).
 |---|---|
 | `ModuleNotFoundError: No module named 'vulpes'` | The virtual environment isn't active in this terminal: run `.venv\Scripts\activate` first (the prompt then starts with `(.venv)`), or call its Python directly: `.venv\Scripts\python.exe scripts\...` |
 | `running scripts is disabled on this system` (when activating) | Windows blocks PowerShell scripts by default. Once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then activate again |
-| `model not found` / `No such file or directory` | Run the commands from the repository folder (`Aupus-AI`), not from `scripts\` |
+| `model not found` / `No such file or directory` | Run the commands from the repository folder (`VulpesAI`), not from `scripts\` |
 | `CUDA out of memory` | Close GPU-heavy programs, or set `grad_checkpointing: true` in the config (or add `grad_checkpointing=true` to the `--resume` command) |
 | `loss is nan` and the run stops | Resume from the last checkpoint; if it happens again at the same place, lower the learning rate: `--resume runs/vulpes-0.1-base optim.lr=3e-4` |
 | `already has checkpoints; pass --resume` | You used `--config` for an existing run: use `--resume` instead |
@@ -204,8 +204,9 @@ of training time (not counting stops). `configs/train/small.yaml` trains the `sm
 (125M parameters) for 2.5B tokens: 9,537 steps of ~150 s, so **~16–17 days of GPU time**,
 3–4 weeks in practice with stops. The `eta` in the log is the remaining training time.
 Smaller budgets finish sooner but give a weaker model (`max_steps=...` when starting);
-the reasoning is in docs/PLAN.md. A rented RTX 4090 trains the same run in ~13–17 h for
-~5–6 USD: [`docs/RUNPOD.md`](RUNPOD.md).
+the reasoning is in docs/PLAN.md. A rented GPU trains the same run in hours: Vulpes 0.1 itself
+was trained on one A100 80 GB in ~4 h, and an RTX 4090 needs ~13–17 h for ~5–6 USD
+([`docs/RUNPOD.md`](RUNPOD.md)).
 
 ## 3. Evaluate the Base model
 
@@ -255,11 +256,18 @@ it, zip it and attach it to a GitHub Release: weights never go into the git repo
 
 ## Training longer or on more data later
 
-- **Longer:** resume with a higher `max_steps`. The learning rate is a cosine curve that
-  ends at `max_steps`, so a higher value stretches the curve: the rate jumps up a little
-  and then decays again over the new remaining steps. Deciding early (mid-run) is
-  better than after a run has finished, when the rate has already reached its minimum.
-- **More data:** download more files (`--files 8`), rebuild the shards into a new
-  directory, and start a new run on it.
-- **A bigger model:** `configs/model/base.yaml` (348M parameters) needs a GPU with more
-  memory, or many weeks on a 4 GB card.
+- **Longer:** resume with a higher `max_steps`. With the cosine schedule (`small.yaml`) the
+  learning rate is a curve that ends at `max_steps`, so a higher value stretches it: the rate
+  jumps up a little and then decays again over the new remaining steps. Deciding early
+  (mid-run) is better than after a run has finished, when the rate has already reached its
+  minimum. With `optim.schedule: wsd` (warmup, stable, decay, as in Vulpes Flos 1.0) the rate
+  stays flat until the last `decay_fraction` of the run, so `max_steps` can change on any resume
+  before the decay starts with no effect at all on the steps already trained;
+  `python scripts/train_status.py` says which `max_steps` starts the decay now.
+- **More data:** download more files (`--files 14` is the whole `sample-10BT`, 28.5 GB), rebuild
+  the shards into a new directory, and start a new run on it.
+- **A bigger model:** `configs/model/base.yaml` (348M parameters, Vulpes Flos 1.0) needs a GPU with
+  more memory, or many months on a 4 GB card. Its run, `configs/train/flos-kaggle.yaml`, is planned
+  on Kaggle's free 2× T4 ([`docs/PLAN-FLOS.md`](PLAN-FLOS.md)); several GPUs are used with
+  `torchrun --standalone --nproc_per_node <GPUs> scripts/train.py ...` and the run stays the same
+  run, so it can move between 2 GPUs, 1 GPU and this PC like any other.

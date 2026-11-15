@@ -89,7 +89,8 @@ FOX_ASCII = [
 #: the panel and the input box.
 FOX_MIN_LINES = 28
 
-# fmt: off  (two rows per table read better than thirty lines)
+# Two rows per table read better than thirty lines.
+# fmt: off
 UNICODE_GLYPHS = {
     "h": "─", "v": "│", "tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "lt": "├", "rt": "┤",
     "bullet": "●", "prompt": "❯", "dot": "·", "more": "…", "elbow": "└", "bar": "━", "warn": "▲",

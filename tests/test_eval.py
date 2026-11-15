@@ -242,3 +242,12 @@ def test_evaluate_script(tiny_run, tmp_path):
     results = json.loads(out.read_text())
     assert set(results["tasks"]) == {"piqa", "arc_easy"} and results["tasks"]["piqa"]["n"] == 4
     assert results["val"]["loss"] > 0 and results["info"]["step"] == 40
+    assert results["val"]["seq_len"] == 64  # the model's context by default
+
+    # --val-seq-len: shorter windows, as when comparing Flos (2,048) with 0.1 (1,024) on one val set.
+    short = cmd[: cmd.index("--out")] + ["--val-seq-len", "16", "--out", str(out)]
+    assert subprocess.run(short, capture_output=True, text=True, cwd=ROOT, check=False).returncode == 0
+    assert json.loads(out.read_text())["val"]["seq_len"] == 16
+    too_long = cmd + ["--val-seq-len", "65"]
+    proc = subprocess.run(too_long, capture_output=True, text=True, cwd=ROOT, check=False)
+    assert proc.returncode != 0 and "longer than the model's context" in proc.stderr

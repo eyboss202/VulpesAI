@@ -47,7 +47,10 @@ def check(text: str, cfg: FilterConfig) -> str | None:
 
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     if lines:
-        if sum(1 for line in lines if line.endswith(("...", "…"))) / len(lines) > cfg.max_ellipsis_line_fraction:
+        if (
+            sum(1 for line in lines if line.endswith(("...", "…"))) / len(lines)
+            > cfg.max_ellipsis_line_fraction
+        ):
             return "ellipsis_lines"
         if sum(1 for line in lines if line.startswith(_BULLETS)) / len(lines) > cfg.max_bullet_line_fraction:
             return "bullet_lines"

@@ -107,7 +107,7 @@ class FakePod:
 def test_sync_copies_the_run_and_confirms_the_end(tmp_path, monkeypatch):
     sync = load_sync()
     pod = FakePod(tmp_path / "pod")
-    run = pod.root / "workspace/Aupus-AI/runs/vulpes-0.1-base"
+    run = pod.root / "workspace/VulpesAI/runs/vulpes-0.1-base"
     run.mkdir(parents=True)
     (run / "config.yaml").write_text("max_steps: 9537\n")
     (run / "metrics.jsonl").write_text('{"step": 100, "train/loss": 4.5}\n')
@@ -118,7 +118,7 @@ def test_sync_copies_the_run_and_confirms_the_end(tmp_path, monkeypatch):
     (run / "tb" / "events.out").write_bytes(b"e")
     monkeypatch.setattr(sync, "run", pod)
     remote = sync.parse_ssh_command("ssh root@pod -p 1")
-    remote_dir, here = "/workspace/Aupus-AI/runs/vulpes-0.1-base", tmp_path / "pc" / "vulpes-0.1-base"
+    remote_dir, here = "/workspace/VulpesAI/runs/vulpes-0.1-base", tmp_path / "pc" / "vulpes-0.1-base"
 
     assert not sync.sync_once(remote, remote_dir, here, keep=2)  # training: copies, doesn't confirm
     assert sorted(p.name for p in here.iterdir()) == [

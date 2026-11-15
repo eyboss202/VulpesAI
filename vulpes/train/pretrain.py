@@ -319,6 +319,7 @@ class Trainer:
         if self.dist.is_main:  # all processes hold the same state; one copy is enough
             checkpoint.save(self.state_dict(), path)
             checkpoint.prune(self.run_dir, self.cfg.keep_last)
+        distributed.barrier(self.device, self.dist)  # see distributed.barrier: nobody leaves mid-save
         return path
 
     def _load(self, path: Path) -> None:

@@ -29,7 +29,7 @@ from vulpes.data import (
     open_split,
     prepare,
 )
-from vulpes.data.dedup import shingles
+from vulpes.data.dedup import KeySet, shingles
 from vulpes.data.shards import write_meta
 from vulpes.tokenizer import EOS, Tokenizer
 
@@ -190,6 +190,44 @@ def test_exact_dedup():
     assert not dedup.is_exact_duplicate(exact_hash("same text"))
     assert dedup.is_exact_duplicate(exact_hash("same text"))
     assert not dedup.is_exact_duplicate(exact_hash("other text"))
+
+
+def test_key_set_is_a_set_of_64_bit_ints():
+    """KeySet holds the near-dedup state in ~8x less memory; it must answer exactly like a set."""
+    rng = random.Random(11)
+    keys = [rng.getrandbits(64) for _ in range(3000)]
+    keys += [k ^ (1 << 40) for k in keys[:500]]  # same low bits: collide on the slot, differ as keys
+    keys += [0, 1, 2**64 - 1, *keys[:200]]  # the empty-slot marker, the edges, repeats
+    ks, ref = KeySet(capacity=8), set()  # tiny start: grows (and rehashes) many times
+    for k in keys:
+        assert (k in ks) == (k in ref)
+        ks.add(k)
+        ref.add(k)
+        assert len(ks) == len(ref)
+    assert all(k in ks for k in ref)
+    assert not any(k in ks for k in (rng.getrandbits(64) for _ in range(2000)) if k not in ref)
+    assert ks.nbytes <= 8 * len(ref) / 0.35  # the load factor stays between 0.35 and 0.7
+    with pytest.raises(ValueError, match="power of two"):
+        KeySet(capacity=1000)
+
+
+def test_near_dedup_decisions_are_those_of_a_set():
+    # Same keep/drop decisions as the Python-set version that built Vulpes 0.1's shards, so
+    # rebuilding them (or the first files of the full sample-10BT, K3) gives the same bytes.
+    rng = random.Random(5)
+    pool = [rng.getrandbits(64) for _ in range(400)]  # a small pool, so many documents share a band
+    docs = [[rng.choice(pool) if rng.random() < 0.05 else rng.getrandbits(64) for _ in range(16)]
+            for _ in range(5000)]  # fmt: skip
+    seen: set[int] = set()
+    expected = []
+    for keys in docs:
+        dup = any(k in seen for k in keys)
+        if not dup:
+            seen.update(keys)
+        expected.append(dup)
+    dedup = Deduplicator()
+    assert [dedup.is_near_duplicate(keys) for keys in docs] == expected
+    assert 0.1 < sum(expected) / len(expected) < 0.9  # both outcomes were exercised
 
 
 def test_dedup_config_validation():

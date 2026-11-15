@@ -83,14 +83,18 @@ def oasst_conversations(
             children[r["parent_id"]].append(r)
 
     def usable(r: dict[str, Any]) -> bool:
-        return r["lang"] == lang and not r["deleted"] and r["review_result"] is True and bool(r["text"].strip())
+        return (
+            r["lang"] == lang and not r["deleted"] and r["review_result"] is True and bool(r["text"].strip())
+        )
 
     def best_child(r: dict[str, Any]) -> dict[str, Any] | None:
         options = [c for c in children[r["message_id"]] if usable(c)]
         rank = lambda c: (math.inf if c["rank"] is None else c["rank"], c["created_date"])  # noqa: E731
         return min(options, key=rank) if options else None
 
-    roots = sorted((r for r in messages.values() if r["parent_id"] is None), key=lambda r: r["message_tree_id"])
+    roots = sorted(
+        (r for r in messages.values() if r["parent_id"] is None), key=lambda r: r["message_tree_id"]
+    )
     for root in roots:
         if not usable(root) or root["role"] != "prompter":
             continue
@@ -114,7 +118,9 @@ def oasst_conversations(
         yield {"id": f"oasst/{root['message_tree_id']}", "source": "oasst2", "messages": turns}
 
 
-def dolly_conversations(records: Iterable[dict[str, Any]], stats: Counter | None = None) -> Iterator[Conversation]:
+def dolly_conversations(
+    records: Iterable[dict[str, Any]], stats: Counter | None = None
+) -> Iterator[Conversation]:
     """One single-turn conversation per Dolly record: instruction (+ passage) -> response."""
     stats = stats if stats is not None else Counter()
     for i, r in enumerate(records):
@@ -150,7 +156,9 @@ def identity_conversations(path: str | Path) -> list[Conversation]:
     return out
 
 
-def split(conversations: Iterable[Conversation], val_fraction: float) -> tuple[list[Conversation], list[Conversation]]:
+def split(
+    conversations: Iterable[Conversation], val_fraction: float
+) -> tuple[list[Conversation], list[Conversation]]:
     """Deterministic train/val split by hash of the conversation id."""
     train, val = [], []
     for c in conversations:
@@ -244,7 +252,9 @@ class SFTLoader:
         group: batches per sorting group (see the module docstring).
     """
 
-    def __init__(self, dataset: SFTDataset, batch_size: int, pad_id: int, seed: int = 0, group: int = 50) -> None:
+    def __init__(
+        self, dataset: SFTDataset, batch_size: int, pad_id: int, seed: int = 0, group: int = 50
+    ) -> None:
         if len(dataset) == 0:
             raise ValueError("empty SFT dataset")
         self.dataset, self.batch_size, self.pad_id = dataset, batch_size, pad_id

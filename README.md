@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/eyboss202/Aupus-AI/actions/workflows/ci.yml"><img src="https://github.com/eyboss202/Aupus-AI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/eyboss202/VulpesAI/actions/workflows/ci.yml"><img src="https://github.com/eyboss202/VulpesAI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-1d1c22" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12-1d1c22" alt="Python 3.11 | 3.12">
   <img src="https://img.shields.io/badge/PyTorch-plain-1d1c22" alt="Plain PyTorch">
@@ -58,8 +58,8 @@ in [`docs/`](docs/).
 | **Vulpes Lusitanus 1.0** | ~1B | Code, Portuguese and tools, on a new tokenizer | 📝 planned, after Flos ([PDF, Portuguese](docs/Vulpes-Lusitanus-1.0-Plano.pdf)) |
 
 *Flos* is Latin for flower; *Lusitanus*, for Portuguese. Until November 2026 the project was
-called Aupus, and the repository still is. Tokenizers, datasets, checkpoints and releases made
-under the old name load as they are.
+called Aupus (and this repository `Aupus-AI`). Tokenizers, datasets, checkpoints and releases
+made under the old name load as they are.
 
 ## Vulpes 0.1, measured
 
@@ -109,10 +109,12 @@ The same recipe, scaled to what Kaggle's free GPUs can do in a few months, at **
 | Hardware | one rented A100, ~4 h | Kaggle's free 2× T4, in chained 12-hour sessions (and its TPUs, if a trial pays off) |
 | Expected HellaSwag / ARC-Easy | 31% / 52% (measured) | 36–41% / 56–62% (estimates) |
 
-New in the training code for it: two-GPU data parallelism (DDP), a warmup–stable–decay schedule
-whose length can change mid-run, fp16 with loss scaling on GPUs without bf16, and a session
-cycle that resumes the run bit for bit every 12 hours. Milestones K1–K10, decisions and risks:
-[`docs/PLAN-FLOS.md`](docs/PLAN-FLOS.md) (summary of the full
+New in the training code for it, done and tested (milestone K2): two-GPU data parallelism (DDP)
+that trains exactly the sequences of a one-GPU step, a warmup–stable–decay schedule whose length
+can change mid-run, and fp16 with loss scaling on GPUs without bf16. The Kaggle session cycle that
+resumes the run every 12 hours is written and tested too ([`docs/KAGGLE.md`](docs/KAGGLE.md), K4), and
+the full dataset is being built (K3). Milestones K1–K10, decisions,
+risks and measurements: [`docs/PLAN-FLOS.md`](docs/PLAN-FLOS.md) (from the full
 [plan in Portuguese](docs/Vulpes-Flos-1.0-Plano.pdf)).
 
 ## Why from scratch?
@@ -169,7 +171,7 @@ Requirements: Python 3.11+ on Linux, macOS or Windows. A GPU isn't needed for de
 tests; everything runs on CPU with the tiny `debug` preset.
 
 ```bash
-git clone https://github.com/eyboss202/Aupus-AI.git && cd Aupus-AI
+git clone https://github.com/eyboss202/VulpesAI.git && cd VulpesAI
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 
 # 1. PyTorch for your machine first
@@ -202,6 +204,7 @@ python scripts/prepare_data.py --source parquet --input data/raw/fineweb_edu --o
 # 3. Pretraining (Ctrl-C stops safely; --resume continues bit for bit)
 python scripts/train.py --config configs/train/small.yaml
 python scripts/train.py --resume runs/vulpes-0.1-base
+torchrun --standalone --nproc_per_node 2 scripts/train.py --config configs/train/flos-kaggle.yaml   # Flos, 2 GPUs
 python scripts/train_status.py --watch 30                 # progress, speed, time left, GPU heat
 
 # 4. Evaluation
@@ -222,7 +225,7 @@ Where to train:
 |---|---|---|
 | Your own NVIDIA GPU | [`docs/TRAINING.md`](docs/TRAINING.md) | Vulpes 0.1 on 4 GB: ~16–17 days, stopped and resumed as often as you like |
 | A rented GPU on RunPod | [`docs/RUNPOD.md`](docs/RUNPOD.md) | Vulpes 0.1 in hours, for a few dollars: set up, trained, copied home and stopped by `scripts/runpod/` |
-| Kaggle's free GPUs | [`docs/KAGGLE.md`](docs/KAGGLE.md) | Vulpes Flos 1.0 on 2× T4, one 12-hour session at a time, by `scripts/kaggle/` |
+| Kaggle's free GPUs | [`docs/KAGGLE.md`](docs/KAGGLE.md) | Vulpes Flos 1.0 on 2× T4 with `torchrun`, one 12-hour session at a time: the notebook and `scripts/kaggle/` resume the run, hand it to the next session and copy it home |
 
 Every run is one strict YAML file in `configs/train/` (a typo in a key is an error), and any key
 can be overridden on the command line (`optim.lr=3e-4`). A run writes everything to
@@ -245,9 +248,9 @@ configs/model/    presets: debug (~6.5M), tiny (~34M), small (125M, Vulpes 0.1),
 configs/data/     data-pipeline settings
 configs/train/    pretraining runs: tiny (check run), small (Vulpes 0.1), flos-kaggle (Vulpes Flos 1.0), ...
 configs/sft/      fine-tuning runs
-scripts/          entry points; runpod/ (rented GPU) and kaggle/ (free GPUs) automate whole runs
+scripts/          entry points; runpod/ automates a whole run on a rented GPU, kaggle/ one free 12-hour session
 tests/            pytest suite, CPU only, run by CI
-docs/             plans (PLAN.md for 0.1, PLAN-FLOS.md), guides (TRAINING, RUNPOD, KAGGLE, IDENTITY), DATA.md
+docs/             plans (PLAN.md for 0.1, PLAN-FLOS.md for Flos, the PDFs), guides (TRAINING, RUNPOD, KAGGLE, IDENTITY), DATA.md
   assets/         the fox: logo.svg, logo-small.svg (16–32 px), wordmarks, screenshots
 vulpes.sh         one-command launcher for the chat
 MODEL_CARD.md     what the models are, how they were made, their limits
@@ -257,7 +260,7 @@ Data, checkpoints, logs and release weights stay out of git (see `.gitignore`).
 
 ## The fox
 
-The logo is the author's own drawing ([`logoVulpes.png`](logoVulpes.png)), vectorised into
+The logo is the author's own drawing ([`docs/assets/logo-original.png`](docs/assets/logo-original.png)), vectorised into
 [`docs/assets/logo.svg`](docs/assets/logo.svg) and a heavier
 [`logo-small.svg`](docs/assets/logo-small.svg) for tab icons and small sizes. The colour is fox
 orange `#E57952`, deepened to `#B5471F` where it is text on paper (5:1 contrast). The name is

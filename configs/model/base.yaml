@@ -1,8 +1,9 @@
-# base (~348M params): only if hardware/budget allows (see docs/PLAN.md).
+# base (~348M params): Vulpes Flos 1.0 (docs/PLAN-FLOS.md). Deep and narrow like small (28 layers at
+# width 1,024, as MobileLLM-350M), GQA 16:4, and a 2,048-token context (decision D3).
 vocab_size: 32000
 d_model: 1024
 n_layers: 28
 n_heads: 16
 n_kv_heads: 4
 ffn_hidden: 2816
-context_length: 1024
+context_length: 2048

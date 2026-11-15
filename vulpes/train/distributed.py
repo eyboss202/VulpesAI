@@ -105,6 +105,18 @@ def sum_(values: list[float], device: torch.device, info: DistInfo) -> list[floa
     return t.tolist()
 
 
+def barrier(device: torch.device, info: DistInfo) -> None:
+    """Wait until every process gets here (a no-op without DDP).
+
+    After a save, process 0 has spent up to a minute writing a 4.2 GB checkpoint while the
+    others went ahead. At the end of a session they would exit first, and ``torchrun``
+    stops the remaining processes (SIGTERM, then SIGKILL ~30 s later) as soon as one of them
+    exits with an error code (130, "stopped before max_steps"), which could kill process 0
+    mid-save. Waiting here keeps the last checkpoint of every session.
+    """
+    sum_([0.0], device, info)
+
+
 def any_(flag: bool, device: torch.device, info: DistInfo) -> bool:
     """True on every process if it is True on any one (e.g. one of them was told to stop)."""
     return sum_([float(flag)], device, info)[0] > 0

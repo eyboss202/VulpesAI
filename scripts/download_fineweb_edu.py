@@ -13,10 +13,12 @@ order as ``--source fineweb-edu`` would.
 
 Sizes at the pinned revision: 13 files of 2.15 GB (~725K documents each) and
 a last one of 0.54 GB. Four files (~2.9M documents, ~3B tokens before
-filtering and dedup) cover the 2.5B-token budget for ``small``.
+filtering and dedup) cover Vulpes 0.1's 2.5B-token budget; Vulpes Flos 1.0 uses
+all 14 (28.5 GB, ~9.5B tokens; docs/PLAN-FLOS.md, K3).
 
 Usage:
-    python scripts/download_fineweb_edu.py                 # first 4 files, 8.6 GB
+    python scripts/download_fineweb_edu.py                 # first 4 files, 8.6 GB (Vulpes 0.1)
+    python scripts/download_fineweb_edu.py --files 14      # all of sample-10BT, 28.5 GB (Vulpes Flos 1.0)
     python scripts/download_fineweb_edu.py --files 1       # one file, 2.15 GB
     python scripts/download_fineweb_edu.py --list          # show the files, download nothing
 """

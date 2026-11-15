@@ -8,6 +8,9 @@ Usage:
     python scripts/download_eval_data.py                                   # once, ~7 MB
     python scripts/evaluate.py --model runs/vulpes-0.1-base/best.pt --val-data data/pretrain/fineweb_edu
     python scripts/evaluate.py --model runs/tiny/best.pt --tasks piqa --limit 200   # quick look
+    # Vulpes Flos 1.0 on 0.1's val set, also in 0.1's 1,024-token windows (docs/PLAN-FLOS.md §8)
+    python scripts/evaluate.py --model runs/vulpes-flos-1.0-base/best.pt \\
+        --val-data data/pretrain/fineweb_edu --val-seq-len 1024
 
 Cost: the three tasks are ~14K questions, ~45K scored continuations, ~3.8M
 tokens of forward passes (no backward), so a few minutes on a GPU and roughly
@@ -39,6 +42,9 @@ def main() -> None:
     parser.add_argument("--eval-dir", type=Path, default=Path("data/eval"))
     parser.add_argument("--val-data", type=Path, help="prepared dataset dir: also report val perplexity")
     parser.add_argument("--val-batches", type=int, default=None, help="limit val perplexity to N batches")
+    parser.add_argument(
+        "--val-seq-len", type=int, default=None, help="val window length (default: the model's context)"
+    )
     parser.add_argument("--limit", type=int, default=None, help="first N questions per task")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
@@ -58,11 +64,17 @@ def main() -> None:
     results: dict = {"model": args.model.as_posix(), "info": loaded.info, "tasks": {}}
     if args.val_data:
         t0 = time.perf_counter()
-        val = evaluate_loss(model, tok, args.val_data, max_batches=args.val_batches)
-        results["val"] = {**val, "data_dir": args.val_data.as_posix()}
+        seq_len = args.val_seq_len or model.cfg.context_length
+        if seq_len > model.cfg.context_length:
+            parser.error(
+                f"--val-seq-len {seq_len} is longer than the model's context ({model.cfg.context_length})"
+            )
+        val = evaluate_loss(model, tok, args.val_data, seq_len=seq_len, max_batches=args.val_batches)
+        results["val"] = {**val, "data_dir": args.val_data.as_posix(), "seq_len": seq_len}
         print(
             f"val: loss {val['loss']:.4f} | ppl {val['ppl']:.2f} | {val['bits_per_byte']:.4f} bits/byte "
-            f"| {val['tokens'] / 1e6:.2f}M tokens | {time.perf_counter() - t0:.0f} s"
+            f"| {val['tokens'] / 1e6:.2f}M tokens in windows of {seq_len:,} "
+            f"| {time.perf_counter() - t0:.0f} s"
         )
 
     print(f"\n{'task':<10} {'n':>6} {'acc':>15} {'acc_norm':>9} {'random':>7} {'time':>6}")

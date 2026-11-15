@@ -69,7 +69,7 @@ def make_optimizer(model: nn.Module, cfg: OptimConfig, device: torch.device) -> 
 
 
 def decay_start(cfg: OptimConfig, max_steps: int) -> int:
-    """First step of the WSD decay (``max_steps`` for cosine, which has no plateau)."""
+    """First step of the decay: after the WSD plateau, or right after warmup for cosine (no plateau)."""
     if cfg.schedule != "wsd":
         return cfg.warmup_steps
     return max(cfg.warmup_steps, max_steps - max(1, round(cfg.decay_fraction * max_steps)))

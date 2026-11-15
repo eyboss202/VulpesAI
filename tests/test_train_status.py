@@ -48,3 +48,25 @@ def test_status_before_the_first_step(tmp_path):
     )
     text = status.render(status.read_status(run), None)
     assert "step 0 / 10" in text and "no step finished yet" in text and "none yet" in text
+
+
+def test_status_of_a_wsd_run_says_how_to_start_the_decay(tmp_path):
+    status = load_script()
+    run = tmp_path / "runs" / "flos"
+    run.mkdir(parents=True)
+    optim = {"lr": 3e-4, "min_lr": 3e-5, "warmup_steps": 10, "schedule": "wsd", "decay_fraction": 0.15}
+    cfg = {"max_steps": 1000, "micro_batch": 1, "grad_accum": 2, "seq_len": 8, "save_every": 40}
+    (run / "config.yaml").write_text(yaml.safe_dump({**cfg, "optim": optim}))
+    records = [{"step": s, "train/loss": 5.0, "perf/tokens_per_sec": 100.0} for s in range(1, 501)]
+    (run / "metrics.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    text = status.render(status.read_status(run), None)
+    assert "flat lr 3.00e-04 until step 850" in text
+    assert "none yet (the first one is written at step 40)" in text
+    assert "max_steps=" not in text  # nothing to resume from yet
+
+    # Resuming from step 480 with max_steps=565 starts the decay right there (565 - 15% = 480).
+    (run / "step_000480.pt").write_bytes(b"")
+    s = status.read_status(run)
+    assert s["schedule"]["decay_now"] == 565
+    assert f"--resume {run.as_posix()} max_steps=565" in status.render(s, None)
+    assert status.latest_run(tmp_path / "runs") == run and status.latest_run(tmp_path / "none") is None

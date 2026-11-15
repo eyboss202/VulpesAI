@@ -77,7 +77,9 @@ def iter_fineweb_edu(revision: str = FINEWEB_EDU_REVISION) -> Iterator[str]:
     """
     from datasets import load_dataset
 
-    for record in load_dataset(FINEWEB_EDU, name=FINEWEB_EDU_SUBSET, split="train", streaming=True, revision=revision):
+    for record in load_dataset(
+        FINEWEB_EDU, name=FINEWEB_EDU_SUBSET, split="train", streaming=True, revision=revision
+    ):
         yield record["text"]
 
 
@@ -215,7 +217,9 @@ def prepare(
 
     tok = Tokenizer.load(tokenizer_path)
     splits = {s: w.close() for s, w in writers.items()}
-    write_meta(out_dir, splits, tokenizer_path, tok.vocab_size, tok.special_id(EOS), extra={"config": cfg_dict})
+    write_meta(
+        out_dir, splits, tokenizer_path, tok.vocab_size, tok.special_id(EOS), extra={"config": cfg_dict}
+    )
     n_in = counts["input"]
     kept = counts["kept:train"] + counts["kept:val"]
     stats = {

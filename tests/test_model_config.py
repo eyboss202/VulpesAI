@@ -34,6 +34,18 @@ def test_small_preset_exact_count():
     assert param_count(ModelConfig.preset("small"))["total"] == 125_264_640
 
 
+def test_base_preset_matches_the_flos_plan():
+    """Vulpes Flos 1.0 is ``base`` at 2,048 tokens: the numbers in docs/PLAN-FLOS.md come from here."""
+    cfg = ModelConfig.preset("base")
+    counts = param_count(cfg)
+    assert (counts["total"], counts["non_embedding"]) == (348_447_744, 315_679_744)
+    assert cfg.context_length == 2048
+    train = flops_per_token(cfg)["train"]
+    assert train == pytest.approx(2.44e9, rel=2e-3)  # 2.44 GFLOP per token
+    assert train / flops_per_token(cfg, 1024)["train"] == pytest.approx(1.08, abs=0.005)  # D3: +8%
+    assert train * 10e9 == pytest.approx(2.4e19, rel=0.02)  # the 10B-token run
+
+
 def test_unknown_preset_lists_available():
     with pytest.raises(ConfigError, match="available: base, debug, small, tiny"):
         ModelConfig.preset("huge")

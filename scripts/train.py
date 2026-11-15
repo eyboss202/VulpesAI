@@ -22,11 +22,14 @@ On several GPUs, start it with ``torchrun`` (one process per GPU; ``vulpes/train
 The run is the same as on one GPU, and ``--resume`` works in both directions::
 
     torchrun --standalone --nproc_per_node 2 scripts/train.py --config configs/train/flos-kaggle.yaml
-    torchrun --standalone --nproc_per_node 2 scripts/train.py --resume runs/vulpes-flos-1.0-base --stop-after 11
+    torchrun --standalone --nproc_per_node 2 scripts/train.py --resume runs/vulpes-flos-1.0-base \
+        --stop-after 11
 
 Under torchrun, stop with ``--stop-after`` (or SIGTERM to the workers) rather than Ctrl-C:
 torchrun shuts its workers down soon after it gets Ctrl-C itself, possibly before the step
-being finished is saved (the checkpoint before it is always intact).
+being finished is saved (the checkpoint before it is always intact). Every process waits at
+each save until process 0 has written it, so they all exit together and torchrun never stops
+process 0 halfway through its last checkpoint.
 
 Everything a run writes goes to ``<out_dir>/<run_name>/``: ``config.yaml``,
 ``model.yaml``, ``train.log``, ``metrics.jsonl``, ``tb/`` (TensorBoard:

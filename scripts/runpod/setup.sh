@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepare a RunPod pod for Vulpes 0.1 Base pretraining (docs/RUNPOD.md). Run it once, inside the pod:
 #
-#   cd /workspace && git clone https://github.com/eyboss202/Aupus-AI.git && cd Aupus-AI
+#   cd /workspace && git clone https://github.com/eyboss202/VulpesAI.git && cd VulpesAI
 #   bash scripts/runpod/setup.sh
 #
 # It runs inside tmux session "vulpes-setup" (an SSH drop doesn't stop it; `tmux attach -t vulpes-setup`
@@ -133,8 +133,8 @@ for key, want in expected.items():
 if found != expected:
     sys.exit(
         "ERROR: these shards differ from the PC's, so the run could not be finished on the PC.\n"
-        "Copy the PC's shards here instead (on the PC, from the Aupus-AI folder):\n"
-        "  scp -P <port> -i ~/.ssh/id_ed25519 -r data/pretrain/fineweb_edu root@<ip>:/workspace/Aupus-AI/data/pretrain/\n"
+        "Copy the PC's shards here instead (on the PC, from the VulpesAI folder):\n"
+        "  scp -P <port> -i ~/.ssh/id_ed25519 -r data/pretrain/fineweb_edu root@<ip>:/workspace/VulpesAI/data/pretrain/\n"
         "after deleting this build: rm -rf data/pretrain/fineweb_edu (then run setup.sh again)"
     )
 print("same data as the PC")
@@ -177,6 +177,6 @@ cat <<EOF
 === ready ===
 Start training (it runs in tmux; Ctrl-b d leaves it running):
   bash scripts/runpod/train.sh
-On the PC, from the Aupus-AI folder, keep a copy of the run as it trains:
+On the PC, from the VulpesAI folder, keep a copy of the run as it trains:
   python scripts/runpod/sync.py "ssh root@$ip -p $port -i ~/.ssh/id_ed25519"
 EOF

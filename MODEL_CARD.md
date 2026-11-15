@@ -1,8 +1,8 @@
 # Vulpes 0.1 model card
 
-> **Status: draft.** Vulpes 0.1 hasn't been trained yet. This card describes what
-> the models are and how they are made; every number marked *pending* is filled
-> in from the real runs (Milestones 8–10). Nothing here is a promise.
+> **Status:** Vulpes 0.1 Base and Instruct were trained on 2026-11-10; the numbers below are
+> measured. The weights aren't published yet. The next model, Vulpes Flos 1.0 (348M), gets its
+> own card at its release (milestone K10, [`docs/PLAN-FLOS.md`](docs/PLAN-FLOS.md)).
 
 ## Models
 
@@ -40,7 +40,7 @@ and measured counts: [`docs/DATA.md`](docs/DATA.md).
 | Pretraining | FineWeb-Edu `sample-10BT` (educational English web pages from Common Crawl), first 4 parquet files at a pinned revision, after our own filters and deduplication | ODC-By 1.0 |
 | Fine-tuning | OpenAssistant oasst2: English conversations, best-ranked reply at each turn | Apache-2.0 |
 | Fine-tuning | Databricks Dolly 15k: instruction/response pairs written by Databricks employees | CC BY-SA 3.0 |
-| Fine-tuning | `data/identity.jsonl`: a few dozen hand-written turns about what Vulpes is | Apache-2.0 |
+| Fine-tuning | `data/identity.jsonl`: 44 short conversations about what Vulpes is (questions by the author; most replies corrected with an AI assistant's help, the one declared exception in docs/DATA.md) | Apache-2.0 |
 
 Benchmarks (HellaSwag, ARC-Easy, PIQA) are used only to measure the models and
 never for training.
@@ -48,14 +48,14 @@ never for training.
 ## Training procedure
 
 - **Base:** next-token prediction on packed 1,024-token windows, AdamW
-  (β = 0.9/0.95, weight decay 0.1 on matmul weights only), linear warmup then
-  cosine decay, gradient clipping at 1.0, fp32 on a GTX 1650 Super (4 GB). Planned: 2.5B
-  tokens (20 per parameter), 9,537 steps of 262,144 tokens, ~16–17 days of GPU time
-  (`configs/train/small.yaml`). Actual time and final losses: *pending*.
+  (β = 0.9/0.95, weight decay 0.1 on matmul weights only), peak LR 6e-4 with 190 warmup steps
+  then cosine decay to 6e-5, gradient clipping at 1.0. 2.5B tokens (20 per parameter), 9,537
+  steps of 262,144 tokens, on one rented A100 80 GB in bf16 with `torch.compile`: ~4 h at
+  ~167,000 tokens/s (138 TFLOPS).
 - **Instruct:** the same loop on conversations in the Vulpes chat template
   (`<|user|> … <|end|><|assistant|> … <|end|>`), loss only on the assistant's
-  replies, learning rate 3e-5, up to 3 epochs with early stopping on
-  validation loss. *Pending*: steps, final losses.
+  replies, learning rate 3e-5, up to 3 epochs (1,808 steps of 32 conversations) with early
+  stopping on validation loss: best at step 600, stopped at step 900.
 
 Configs: `configs/train/`, `configs/sft/`. Every run saves its resolved config
 with its checkpoints, so each published model can be traced to exact settings.
@@ -68,13 +68,16 @@ option's log-probability by its length in characters.
 
 | | Base | Instruct | Random guess |
 |---|---|---|---|
-| HellaSwag (acc_norm, 10,042 questions) | *pending* | *pending* | 25% |
-| ARC-Easy (acc, 2,376) | *pending* | *pending* | 25% |
-| PIQA (acc_norm, 1,838) | *pending* | *pending* | 50% |
-| FineWeb-Edu val perplexity | *pending* | — | 32,000 |
+| HellaSwag (acc_norm, 10,042 questions) | 31.3% | 31.2% | 25% |
+| ARC-Easy (acc, 2,376) | 52.4% | 52.2% | 25% |
+| PIQA (acc_norm, 1,838) | 61.9% | 61.0% | 50% |
+| FineWeb-Edu val perplexity (14.6M tokens) | 22.9 | 24.8 | 32,000 |
+| Bits per byte | 0.983 | 1.007 | — |
 
-Expected range for a model of this size and budget (docs/PLAN.md §8): HellaSwag
-~30%, ARC-Easy ~40–45%, PIQA ~60–63%.
+Raw numbers: `runs/vulpes-0.1-*/eval_best.json`. The plan expected HellaSwag ~30%, ARC-Easy
+~40–45% and PIQA ~60–63% (docs/PLAN.md §8): ARC-Easy came out well above it, the gain
+FineWeb-Edu's educational text is known for. Fine-tuning costs almost nothing on the benchmarks
+and a little perplexity on web text, as expected.
 
 ## Limitations and risks
 
@@ -84,6 +87,8 @@ Expected range for a model of this size and budget (docs/PLAN.md §8): HellaSwag
 - **Weak reasoning.** Multi-step arithmetic, logic and long instructions usually fail.
 - **English only.** Other languages are mostly absent from the training data and
   tokenize poorly.
+- **It calls itself Aupus.** The 0.1 weights were fine-tuned before the project was renamed;
+  `data/identity.jsonl` now says Vulpes, and the next fine-tuning run teaches it.
 - **Short memory.** The context window is ~1,000 tokens. In a long chat the
   oldest messages are dropped.
 - **Bias.** Web text and volunteer-written conversations carry the biases of

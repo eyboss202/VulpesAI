@@ -1,6 +1,6 @@
-# Vulpes 0.1 data
+# Vulpes data
 
-What Vulpes is trained on, under which licenses, and exactly how raw text
+What Vulpes 0.1 and Vulpes Flos 1.0 are trained on, under which licenses, and exactly how raw text
 becomes training tokens. Every number here can be reproduced with the commands
 at the end.
 
@@ -8,7 +8,7 @@ at the end.
 
 | Source | Used for | License | Status |
 |---|---|---|---|
-| [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) `sample-10BT`, revision `87f0914` | Tokenizer training (300 MB), pretraining (~2.5B tokens) | ODC-By 1.0 | Prepared: 2.94B train + 14.6M val tokens (M7) |
+| [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) `sample-10BT`, revision `87f0914` | Tokenizer training (300 MB), pretraining (0.1: 2.5B tokens; Flos: 10–15B+) | ODC-By 1.0 | 0.1: 2.94B train + 14.6M val tokens (M7). Flos: all 14 files, ~9.5B (K3, not built yet) |
 | [OpenAssistant oasst2](https://huggingface.co/datasets/OpenAssistant/oasst2), revision `179dd21` (English, top-ranked branches) | SFT | Apache-2.0 | Converted: 5,270 conversations |
 | [Databricks Dolly 15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k), revision `bdd27f4` | SFT | CC BY-SA 3.0 | Converted: 15,011 conversations |
 | `data/identity.jsonl` (questions hand-written; replies AI-assisted, see below) | SFT | Apache-2.0 | 44 conversations (2026-11-10) |
@@ -74,7 +74,11 @@ Two documents' similarity is the Jaccard index of their sets of word 5-grams.
 MinHash estimates it from 128 numbers per document. LSH makes two documents
 candidates when all 8 values of any of the 16 bands match. A pair with
 similarity 0.8 is caught 95% of the time, 0.5 only 6% (`1 − (1 − s⁸)¹⁶`).
-Memory is ~1.1 KB per kept document (≈ 3 GB for 2.7M documents).
+Memory is ~0.35 KB per kept document: the 16 band keys live in one flat table of 64-bit integers
+(`vulpes.data.dedup.KeySet`), the exact hashes in a set. That is ~1 GB for M7's 2.8M documents and
+~3.4 GB for the ~9.7M of the whole `sample-10BT`. Python sets took ~1.34 KB per document (measured),
+which would have been ~13 GB for the whole sample on a 16 GB desktop (docs/PLAN-FLOS.md, D8); the
+keep/drop decisions are identical (tested), so M7's shards rebuild byte for byte.
 
 ## Milestone 5 run: the 300 MB sample
 
@@ -143,6 +147,26 @@ the 300 MB sample, because copies across crawls only show up at this scale.
 
 The 2.94B tokens are more than the 2.5B budget for `small` (0.85 epochs), so a
 2.5B-token run never sees the same window twice.
+
+## Vulpes Flos 1.0: the whole `sample-10BT` (K3)
+
+All 14 parquet files (28.5 GB) at the same pinned revision, through the same pipeline and config, on
+the desktop at below-normal priority (docs/PLAN-FLOS.md §5, decision D4). Download done 2026-11-14:
+all 14 files, 28.52 GB in 89 min (~5.3 MB/s), every SHA-256 OK. Building the shards is paused until
+the user says so; its results go here.
+
+```bash
+python scripts/download_fineweb_edu.py --files 14            # 28.5 GB, ~1.5 h; files already there are skipped
+python scripts/prepare_data.py --source parquet --input data/raw/fineweb_edu --out data/pretrain/fineweb_edu_10bt --workers 3
+```
+
+Expected: ~9.7M input documents, ~9.5B train tokens (a little less: duplicates grow with scale),
+~19 GB of shards, ~4 h on 3 workers, ~3.4 GB of RAM for dedup. Because files are read in order and
+dedup keeps the first copy, the first 4 files give exactly M7's decisions: every M7 train shard but
+the last (partial) one comes out byte-identical, and the val split starts with M7's whole val set
+(so validation during training reads the same tokens as Vulpes 0.1's). Comparing the SHA-256s of
+those shards with `data/pretrain/fineweb_edu/` is the check that K3 worked. The shards then go to
+Kaggle as a private dataset.
 
 ## Fine-tuning data (Milestone 10)
 

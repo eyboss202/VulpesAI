@@ -28,6 +28,7 @@ from vulpes.train import (
     resolve_precision,
 )
 from vulpes.train import checkpoint as ckpt
+from vulpes.train.optim import decay_start, max_steps_to_decay_from
 
 ROOT = Path(__file__).resolve().parents[1]
 WORDS = [
@@ -145,6 +146,20 @@ def test_shipped_train_configs_load():
         assert cfg.optim.warmup_steps < cfg.max_steps
 
 
+def test_flos_kaggle_config_is_the_planned_run():
+    """configs/train/flos-kaggle.yaml against docs/PLAN-FLOS.md (K7 and decisions D1-D3)."""
+    cfg, model_cfg = resolve_model_config(TrainConfig.from_yaml(ROOT / "configs/train/flos-kaggle.yaml"))
+    assert cfg.model == "base" and model_cfg.context_length == cfg.seq_len == 2048  # D1, D3
+    assert cfg.tokens_per_step == 524_288  # 256 sequences of 2,048: GPT-3 Medium's batch
+    assert cfg.micro_batch * cfg.grad_accum == 256 and cfg.grad_accum % 2 == 0  # splits over 2 T4s
+    assert cfg.tokens_per_step * cfg.max_steps == pytest.approx(15.0e9, rel=1e-3)  # D2: 15B first
+    assert (cfg.optim.schedule, cfg.optim.lr, cfg.precision) == ("wsd", 3e-4, "fp16")
+    # Validation reads the same 819K tokens as Vulpes 0.1's (800 x 1,024), now as 400 x 2,048,
+    # and keeps reading them on one GPU: micro_batch=1 needs eval_batches=400.
+    assert cfg.micro_batch * cfg.eval_batches * cfg.seq_len == 800 * 1024
+    assert cfg.keep_last == 2 and cfg.save_every > 0
+
+
 def test_precision_resolution():
     cpu = torch.device("cpu")
     assert resolve_precision("auto", cpu) == "fp32"
@@ -163,6 +178,38 @@ def test_lr_schedule():
     assert all(a >= b for a, b in zip(lrs[10:], lrs[11:], strict=False))  # then only falls
     assert lr_at(55, cfg, 100) == pytest.approx(0.55)  # cosine midpoint = (lr + min_lr) / 2
     assert lr_at(100, cfg, 100) == pytest.approx(0.1) and lr_at(500, cfg, 100) == pytest.approx(0.1)
+
+
+def test_wsd_schedule():
+    """Warmup, a flat plateau that doesn't depend on max_steps, then a 1 - sqrt decay over the last 20%."""
+    cfg = OptimConfig(lr=1.0, min_lr=0.1, warmup_steps=10, schedule="wsd", decay_fraction=0.2)
+    lrs = [lr_at(s, cfg, 100) for s in range(101)]
+    assert lrs[0] == pytest.approx(0.1) and lrs[9] == pytest.approx(1.0)  # the same warmup as cosine
+    assert decay_start(cfg, 100) == 80 and all(lr == 1.0 for lr in lrs[10:81])
+    assert all(a > b for a, b in zip(lrs[80:100], lrs[81:101], strict=True))  # the decay only falls
+    assert lr_at(85, cfg, 100) == pytest.approx(0.1 + (1 - math.sqrt(0.25)) * 0.9)
+    assert lrs[100] == pytest.approx(0.1) and lr_at(500, cfg, 100) == pytest.approx(0.1)
+    # The point of WSD: on the plateau, a longer or shorter run has had exactly the same LR so far.
+    assert [lr_at(s, cfg, 300) for s in range(81)] == lrs[:81]
+    assert [lr_at(s, cfg, 60) for s in range(48)] == lrs[:48]
+    # Vulpes Flos 1.0 (configs/train/flos-kaggle.yaml): 28,610 steps, decay over the last 15%.
+    flos = OptimConfig(lr=3e-4, min_lr=3e-5, warmup_steps=500, schedule="wsd", decay_fraction=0.15)
+    assert decay_start(flos, 28_610) == 24_318
+    with pytest.raises(ConfigError, match="schedule"):
+        OptimConfig(schedule="linear")
+    with pytest.raises(ConfigError, match="decay_fraction"):
+        OptimConfig(schedule="wsd", decay_fraction=0)
+
+
+def test_max_steps_to_decay_from():
+    """The max_steps to resume with so that the decay starts at a chosen step (decision D2)."""
+    cfg = OptimConfig(lr=1.0, min_lr=0.1, warmup_steps=10, schedule="wsd", decay_fraction=0.15)
+    for step in (11, 57, 1000, 24_318):
+        m = max_steps_to_decay_from(step, cfg)
+        assert decay_start(cfg, m) >= step and decay_start(cfg, m - 1) < step  # the smallest that works
+        assert lr_at(step - 1, cfg, m) == 1.0  # everything before it is still on the plateau
+    with pytest.raises(ValueError, match="wsd"):
+        max_steps_to_decay_from(100, OptimConfig())
 
 
 @pytest.mark.parametrize("tie", [True, False])
@@ -335,6 +382,31 @@ def test_resume_with_another_micro_batch_continues_the_same_run(setup, tmp_path,
     pf, pm = params_of(full), params_of(moved)
     assert all(torch.allclose(pf[k], pm[k], atol=1e-5) for k in pf)
     assert math.isclose(moved.best_val_loss, full.best_val_loss, rel_tol=1e-5)
+
+
+def test_wsd_run_can_be_lengthened_on_the_plateau_but_not_in_the_decay(setup, tmp_path, monkeypatch):
+    # decision D2: a run paid for in weekly quota decides mid-way how long it is.
+    wsd = {"optim.schedule": "wsd", "optim.decay_fraction": 0.5}  # 6 steps: plateau to 3, then decay
+    planned = Trainer(make_cfg(setup, tmp_path, run_name="planned", max_steps=10, **wsd), log=quiet)
+    planned.train()
+
+    grown = Trainer(make_cfg(setup, tmp_path, run_name="grown", **wsd), log=quiet)
+    assert interrupt_after(grown, 2, monkeypatch)["step"] == 2  # still on the plateau
+    lines = []
+    longer = make_cfg(setup, tmp_path, run_name="grown", max_steps=10, **wsd)
+    grown = Trainer(longer, resume=True, log=lines.append)
+    assert any("max_steps 6 -> 10: the learning rate so far is unchanged" in line for line in lines)
+    assert grown.train()["finished"]
+    # Lengthened on the plateau = planned that long from the start, bit for bit.
+    pp, pg = params_of(planned), params_of(grown)
+    assert all(torch.equal(pp[k], pg[k]) for k in pp)
+
+    late = Trainer(make_cfg(setup, tmp_path, run_name="late", **wsd), log=quiet)
+    assert interrupt_after(late, 4, monkeypatch)["step"] == 4  # the decay began at step 3
+    with pytest.raises(ValueError, match=r"already in the WSD decay that began at step 3 of 6.*max_steps=6"):
+        Trainer(make_cfg(setup, tmp_path, run_name="late", max_steps=10, **wsd), resume=True, log=quiet)
+    same = Trainer(make_cfg(setup, tmp_path, run_name="late", **wsd), resume=True, log=quiet)
+    assert same.train()["finished"]  # keeping max_steps is fine
 
 
 def test_samples_continue_the_prompt_and_are_reproducible(setup, tmp_path):

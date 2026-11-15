@@ -1,7 +1,8 @@
-# K7: Vulpes Flos 1.0 Base (`base`, 348.4M params) on Kaggle's free 2x T4 (docs/PLAN-FLOS.md, docs/KAGGLE.md).
-# One run, many 12-hour sessions: scripts/kaggle/session.py starts it the first time and resumes it
-# in every session after, with `torchrun --nproc_per_node 2` and `--stop-after`. It sets data_dir
-# to where the Kaggle dataset is mounted (/kaggle/input/...); the value below is the desktop's path.
+# K7: Vulpes Flos 1.0 Base (`base`, 348.4M params) on Kaggle's free 2x T4 (docs/PLAN-FLOS.md).
+# One run, many 12-hour sessions, each started (first time) or resumed (every time after) with
+#   torchrun --standalone --nproc_per_node 2 scripts/train.py --config|--resume ... --stop-after 11.25
+# scripts/kaggle/session.py (docs/KAGGLE.md) runs that and adds data_dir=<where the Kaggle dataset
+# is mounted, under /kaggle/input>; the value below is the desktop's path, where K3 builds the data.
 #
 # The run is defined by its sequences per step (micro_batch x grad_accum = 256), not by the GPUs:
 # on 2 T4s each does 64 of the 128 micro-batches. It moves to one GPU or to the desktop with
